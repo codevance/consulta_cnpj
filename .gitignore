@@ -1,4 +1,8 @@
+*.crt
+*.h5
 *.pyc
+*.sh
 __pycache__/
-captcha_receita.h5
+certs*
 data/
+libressl*

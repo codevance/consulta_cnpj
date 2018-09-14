@@ -41,12 +41,15 @@ crawler = CrawlerReceita()
 print(crawler("60701190000104"))
 ```
 
-Se o `captcha_receita.h5` não estiver na raíz do projeto, você pode passar a
-localização dele na hora de instanciar a classe `CrawlerReceita`:
+Se o `captcha_receita.h5` não estiver na raíz do projeto (ou tiver outro nome),
+ou se você quiser especificar um certificado específico para a requisição, você
+pode passar a localização deles na hora de instanciar o `CrawlerReceita`:
 
 ```python
-crawler = CrawlerReceita("/path/to/my/models/whatever.h5")
->>>>>>> Refactor main module
+crawler = CrawlerReceita(
+    model="models/whatever.h5",
+    certificate="/etc/openssl/cert.crt"
+)
 ```
 
 O modelo que quebra o captcha está com acurácia de 75%. Mais pra frente, vou

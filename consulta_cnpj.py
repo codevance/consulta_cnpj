@@ -7,8 +7,10 @@ problem using requests.
 
 import time
 from contextlib import ContextDecorator
+from pathlib import Path
 from urllib.parse import urlencode
 from tempfile import NamedTemporaryFile
+from urllib.request import urlretrieve
 
 import numpy as np
 from bs4 import BeautifulSoup
@@ -21,13 +23,37 @@ class Session(ContextDecorator):
     """Context manager to handle curl on terminal directly"""
 
     URL = "https://www.receita.fazenda.gov.br/pessoajuridica/cnpj/cnpjreva/{}"
+    CERTIFICATE = (
+        "http://www.receita.fazenda.gov.br"
+        "/acrfb/ACSecretariadaReceitaFederaldoBrasilv3.crt"
+    )
 
-    def __enter__(self):
+    def __init__(self, path_to_certificate=None):
+        if not path_to_certificate:
+            path_to_certificate = "ACSecretariadaReceitaFederaldoBrasilv3.crt"
+
+        certificate = Path(path_to_certificate).absolute()
+        if not certificate.exists():
+            urlretrieve(self.CERTIFICATE, str(certificate))
+
         self.cookies = NamedTemporaryFile()
-        self.curl = "curl --tlsv1.0 -ksS -b {} -c {}".format(
-            self.cookies.name, self.cookies.name
+        self.curl = " ".join(
+            (
+                "curl",
+                "--silent",
+                "--show-error",
+                "--tlsv1.0",
+                "--cacert {}".format(certificate),
+                "--insecure",
+                "--ssl-no-revoke",
+                "--ssl-allow-beast",
+                "--cookie {}".format(self.cookies.name),
+                "--cookie-jar {}".format(self.cookies.name),
+            )
         )
         self.get("cnpjreva_solicitacao.asp")
+
+    def __enter__(self):
         return self
 
     def __exit__(self, *args):
@@ -42,9 +68,9 @@ class Session(ContextDecorator):
 
         process = Popen(process_str.split(" "), stdout=PIPE, stderr=PIPE)
         stdout, stderr = process.communicate()
-        if not stdout:
+        if not stdout and stderr:
             raise RuntimeError(
-                "{}\nwhen trying to run\n\n$ {}".format(
+                "\n{}\nwhen trying to run\n\n$ {}".format(
                     stderr.decode("utf-8"), process_str
                 )
             )
@@ -63,7 +89,12 @@ class Session(ContextDecorator):
 
 
 class CrawlerReceita:
-    def __init__(self, path_to_model=None):
+    def __init__(self, **kwargs):
+        keys = {"certificate", "model"}
+        if not set(kwargs.keys()).isdisjoint(keys):
+            raise TypeError("CrawlerReceita expects only model and/or certificate")
+
+        path_to_model, self.path_to_certificate = (kwargs.get(k) for k in keys)
         self.model = load_model(path_to_model or "captcha_receita.h5")
         self.classes = {
             index: char
@@ -93,7 +124,7 @@ class CrawlerReceita:
     def __call__(self, cnpj):
         """Method to query a CNPJ. Input bust be a CNPJ (only numbers, no
         punctuation). It returns a dict."""
-        with Session() as session:
+        with Session(self.path_to_certificate) as session:
             captcha = self.solve_captcha(session)
             data = {
                 "origem": "comprovante",
